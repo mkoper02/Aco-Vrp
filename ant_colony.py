@@ -1,10 +1,5 @@
 import numpy as np
-from typing import NamedTuple
-
-class Customer(NamedTuple):
-    id: int
-    x: float
-    y: float
+from customer import Customer
 
 class AntColony:
     def __init__(self, customers: list[Customer], iterations: int, ants: int, alpha: int, beta: int, evaporation: float, Q: int, init_pheromone: float):
@@ -30,14 +25,15 @@ class AntColony:
             for _ in range(self.ants):
                 routes.append(self.run_ant())
 
-            # add if statement to check if given solution is best or the previous ones were better
             route = min(routes, key=lambda x: self.calculate_route_cost(x, self.distance_matrix))
+            route_cost = self.calculate_route_cost(route, self.distance_matrix)
+
             self.update_pheromones(routes=routes)
 
-            if route[1] < best_route[1]:
-                best_route = route
+            if route_cost < best_route[1]:
+                best_route = (route, route_cost)
 
-        return route
+        return best_route[0]
 
     def run_ant(self) -> list[int]:
         visited = [0]
@@ -72,6 +68,19 @@ class AntColony:
 
         return heuristic_matrix
     
+    @staticmethod
+    def static_generate_heuristic_matrix(n_customers: int, Q: int, distance_matrix: np.ndarray) -> np.ndarray:
+        heuristic_matrix = np.zeros((n_customers, n_customers))
+
+        for i in range(n_customers):
+            for j in range(n_customers):
+                if i == j:
+                    heuristic_matrix[i, j] = 0
+                else:
+                    heuristic_matrix[i, j] = Q / distance_matrix[i, j]
+
+        return heuristic_matrix
+    
     def calculate_probabilites(self, current_customer: int, visited: list[int]) -> np.ndarray:
         n_customers = len(self.customers)
         unvisited = [i for i in range(n_customers) if i not in visited]
@@ -87,6 +96,19 @@ class AntColony:
     def select_next_customer(self, current_customer: int, visited: list[int]) -> int:
         probabilities = self.calculate_probabilites(current_customer, visited)
         return np.random.choice(len(self.customers), p=probabilities)
+    
+    @staticmethod
+    def static_select_next_customer(current_customer: int, visited: list[int], pheromone_matrix: np.ndarray, heuristic_matrix: np.ndarray, alpha: int, beta: int) -> int:
+        n_customers = pheromone_matrix.shape[0]
+        unvisited = [i for i in range(n_customers) if i not in visited]
+        probabilities = np.zeros(n_customers)
+
+        for i in unvisited:
+            probabilities[i] = pheromone_matrix[current_customer, i] ** alpha * heuristic_matrix[current_customer, i] ** beta
+
+        probabilities = probabilities / np.sum(probabilities)
+
+        return np.random.choice(n_customers, p=probabilities)
 
     @staticmethod
     def generate_distance_matrix(customers: list[Customer]) -> np.ndarray:
